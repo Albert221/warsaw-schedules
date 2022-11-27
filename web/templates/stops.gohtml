@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ZTM dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet"
+      integrity="sha384-rbsA2VBKQhggwzxH7pPCaAqO46MgnOM80zW1RWuH61DGLwZJEdK2Kadq2F9CUG65" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-kenU1KFdBIe4zVF0s0G1M5b4hcpxyD9F7jL+jjXkk+Q2h455rYXK/7HAuoJl+0I4" crossorigin="anonymous"></script>
+  </head>
+  <body>
+    <header class="navbar navbar-expand-lg bg-light">
+      <div class="container">
+        <a class="navbar-brand" href="#">ZTM dashboard</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <nav class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav mx-auto">
+            <li class="nav-item">
+              <a class="nav-link active" aria-current="page" href="#">Stops</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="#">Lines</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="#">Days</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="#">Misc</a>
+            </li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+    <main class="container mt-5">
+      <table class="table table-bordered">
+        <colgroup>
+          <col>
+          <col>
+          <col>
+          <col>
+          <col>
+          <col style="width: 200px">
+        </colgroup>
+        <thead>
+          <tr>
+            <th colspan="2">Stop ID</th>
+            <th>Name</th>
+            <th>Street</th>
+            <th>Direction</th>
+            <th>Location</th>
+          </tr>
+        </thead>
+        <tbody>
+        {{range .StopComplexes}}
+          {{$complex := .}}
+          <tr class="fw-bold">
+            <td colspan="2">{{.ID}}</td>
+            <td colspan="3">{{.Name}}</td>
+            <td><code class="badge text-bg-light">{{.City.ID}}</code> {{.City.Name}}</td>
+          </tr>
+          {{range $i, $stop := .Stops}}
+          <tr>
+          {{if eq $i 0}}
+            <td rowspan="{{len $complex.Stops }}"></td>
+          {{end}}
+            <td>{{$complex.ID}}{{.ID}}</td>
+            <td>{{$complex.Name}} {{.ID}}</td>
+            <td>{{.Street}}</td>
+            <td>{{.Direction}}</td>
+            <td>{{.Latitude}}, {{.Longitude}}</td>
+          </tr>
+          {{end}}
+        {{end}}
+        </tbody>
+      </table>
+    </main>
+  </body>
+</html>
