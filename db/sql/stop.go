@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"database/sql"
 	"fmt"
 
 	"github.com/jmoiron/sqlx"
@@ -23,12 +24,13 @@ type stopComplexEntity struct {
 }
 
 type stopEntity struct {
-	StopComplexID int     `db:"stop_complex_id"`
-	StopID        int     `db:"stop_id"`
-	Street        string  `db:"street"`
-	Direction     string  `db:"direction"`
-	Latitude      float64 `db:"latitude"`
-	Longitude     float64 `db:"longitude"`
+	StopComplexID int             `db:"stop_complex_id"`
+	StopID        int             `db:"stop_id"`
+	Street        string          `db:"street"`
+	Direction     string          `db:"direction"`
+	Latitude      sql.NullFloat64 `db:"latitude"`
+	Longitude     sql.NullFloat64 `db:"longitude"`
+	Platform      sql.NullInt16   `db:"platform"`
 }
 
 func NewSqlStopRepository(db *sqlx.DB) *SqlStopRepository {
@@ -57,8 +59,9 @@ func (r *SqlStopRepository) FindAll() ([]*model.StopComplex, error) {
 	}
 
 	var stops []stopEntity
-	err = r.db.Select(&stops, `SELECT stop_complex_id, stop_id, street, direction, 
-		ST_Y(location) latitude, ST_X(location) longitude FROM stops ORDER BY stop_id`)
+	err = r.db.Select(&stops, `SELECT stop_complex_id, stop_id, street, direction,
+		ST_Y(location) latitude, ST_X(location) longitude, platform
+		FROM stops ORDER BY stop_id`)
 	if err != nil {
 		return nil, err
 	}
@@ -75,12 +78,25 @@ func (r *SqlStopRepository) FindAll() ([]*model.StopComplex, error) {
 		for i := 0; i < len(stops); i++ {
 			stop := stops[i]
 			if stop.StopComplexID == stopComplex.ID {
+				var location *model.Coordinates
+				if stop.Latitude.Valid && stop.Longitude.Valid {
+					location = &model.Coordinates{
+						Latitude:  stop.Latitude.Float64,
+						Longitude: stop.Longitude.Float64,
+					}
+				}
+				var platform *int
+				if stop.Platform.Valid {
+					tmp := int(stop.Platform.Int16)
+					platform = &tmp
+				}
+
 				complex.Stops = append(complex.Stops, &model.Stop{
 					ID:          fmt.Sprintf("%02d", stop.StopID),
 					Street:      stop.Street,
 					Direction:   stop.Direction,
-					Latitude:    stop.Latitude,
-					Longitude:   stop.Longitude,
+					Location:    location,
+					Platform:    platform,
 					StopComplex: complex,
 				})
 
@@ -126,6 +142,29 @@ func (r *SqlStopRepository) SaveCities(cities ...*model.City) error {
 	}
 
 	_, err := r.db.Exec("REPLACE INTO cities (id, name) VALUES "+valuesStmt, args...)
+
+	return err
+}
+
+func (r *SqlStopRepository) SaveStops(stops ...*model.Stop) error {
+	valuesStmt := ""
+	args := make([]any, 0, len(stops)*6)
+	for i, stop := range stops {
+		if i > 0 {
+			valuesStmt += ", "
+		}
+		valuesStmt += "(?, ?, ?, ?, ST_GeomFromText(?), ?)"
+
+		point := "null"
+		if stop.Location != nil {
+			point = fmt.Sprintf("POINT(%f %f)", stop.Location.Longitude, stop.Location.Latitude)
+		}
+
+		args = append(args, stop.StopComplex.ID, stop.ID, stop.Street, stop.Direction,
+			point, stop.Platform)
+	}
+
+	_, err := r.db.Exec("REPLACE INTO stops (stop_complex_id, stop_id, street, direction, location, platform) VALUES "+valuesStmt, args...)
 
 	return err
 }

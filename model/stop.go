@@ -7,12 +7,17 @@ type StopComplex struct {
 	Stops []*Stop
 }
 
+type Coordinates struct {
+	Latitude  float64
+	Longitude float64
+}
+
 type Stop struct {
 	ID          string
 	Street      string
 	Direction   string
-	Latitude    float64
-	Longitude   float64
+	Location    *Coordinates
+	Platform    *int
 	StopComplex *StopComplex
 }
 

@@ -17,8 +17,19 @@ type StopComplex struct {
 	CityName string
 }
 
+type Stop struct {
+	StopComplexID string
+	StopID        string
+	Street        string
+	Direction     string
+	Latitude      *float64
+	Longitude     *float64
+	Platform      *int
+}
+
 type Parser struct {
 	OnStopComplexesParsed func([]StopComplex) error
+	OnStopsParsed         func([]Stop) error
 
 	r *bufio.Reader
 }
@@ -56,7 +67,7 @@ func (p *Parser) scanSectionHeader() (string, int, error) {
 		return "", 0, io.EOF
 	}
 
-	r := regexp.MustCompile(`^\*([A-Z]{2})\s*(\d+)$`)
+	r := regexp.MustCompile(`\*([A-Z]{2})\s*(\d+)$`)
 	matches := r.FindStringSubmatch(line)
 	if len(matches) != 3 {
 		return "", 0, errors.New("wrong section header: " + line)
@@ -77,7 +88,7 @@ func (p *Parser) scanSectionTerminator(sectionHeader string) error {
 	if err != nil {
 		return err
 	}
-	if last != "#"+sectionHeader {
+	if !strings.Contains(last, "#"+sectionHeader) {
 		return missingSectionTerminatorErr
 	}
 
@@ -122,6 +133,9 @@ func (p *Parser) ScanSections() error {
 				return err
 			}
 		case stopsHeader:
+			if err := p.ScanStops(length); err != nil {
+				return err
+			}
 			return nil
 		case citiesHeader:
 		case routesSchedulesHeader:
@@ -161,9 +175,9 @@ func (p *Parser) ScanRunningDayTypeLineCalendar(length int) error {
 	return nil
 }
 
-func (p *Parser) ScanStopComplexes(length int) error {
-	r := regexp.MustCompile(`(\d{4})\s+(.{30})\s+(.{2})\s+(.+)$`)
+var stopComplexRowRegexp = regexp.MustCompile(`(\d{4})\s+(.{30})\s+(.{2})\s+(.+)$`)
 
+func (p *Parser) ScanStopComplexes(length int) error {
 	stopComplexes := make([]StopComplex, length)
 	for i := 0; i < length; i++ {
 		line, err := p.readLine()
@@ -171,7 +185,7 @@ func (p *Parser) ScanStopComplexes(length int) error {
 			return err
 		}
 
-		matches := r.FindStringSubmatch(line)
+		matches := stopComplexRowRegexp.FindStringSubmatch(line)
 		stopComplexes[i] = StopComplex{
 			ID:     matches[1],
 			Name:   strings.TrimRight(matches[2], " ,"),
@@ -189,4 +203,92 @@ func (p *Parser) ScanStopComplexes(length int) error {
 	}
 
 	return p.scanSectionTerminator(stopComplexesHeader)
+}
+
+func (p *Parser) ScanStops(length int) error {
+	const stopsRowsHeader = "PR"
+	stopRegexp := regexp.MustCompile(`(\d{4})(\d{2})\s+(\d+)\s+Ul\.\/Pl\.: (.+?)Kier\.: (.+)Y=(.+)\s+X=(.+) Pu=(\d+|\?)$`)
+
+	var stops []Stop
+	for i := 0; i < length; i++ {
+		if _, err := p.readLine(); err != nil {
+			return err
+		}
+
+		section, length, err := p.scanSectionHeader()
+		if err != nil {
+			return err
+		}
+		if section != stopsRowsHeader {
+			return errors.New("wrong section: " + section)
+		}
+
+		for j := 0; j < length; j++ {
+			line, err := p.readLine()
+			if err != nil {
+				return err
+			}
+
+			matches := stopRegexp.FindStringSubmatch(line)
+			if len(matches) != 9 {
+				return errors.New("wrong stop: " + line)
+			}
+
+			length, err := strconv.Atoi(matches[3])
+			if err != nil {
+				return errors.Wrap(err, "wrong stop length: "+line)
+			}
+			for k := 0; k < length; k++ {
+				if _, err := p.readLine(); err != nil {
+					return err
+				}
+			}
+
+			lat := parseNullableFloat(strings.TrimSpace(matches[6]))
+			lng := parseNullableFloat(strings.TrimSpace(matches[7]))
+			platform := parseNullableInt(matches[8])
+
+			stop := Stop{
+				StopComplexID: matches[1],
+				StopID:        matches[2],
+				Street:        strings.TrimRight(matches[4], ", "),
+				Direction:     strings.TrimRight(matches[5], ", "),
+				Latitude:      lat,
+				Longitude:     lng,
+				Platform:      platform,
+			}
+			stops = append(stops, stop)
+		}
+
+		if err := p.scanSectionTerminator(stopsRowsHeader); err != nil {
+			return err
+		}
+	}
+
+	if p.OnStopsParsed != nil {
+		err := p.OnStopsParsed(stops)
+		if err != nil {
+			return err
+		}
+	}
+
+	return p.scanSectionTerminator(stopsHeader)
+}
+
+func parseNullableFloat(s string) *float64 {
+	parsed, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return nil
+	}
+
+	return &parsed
+}
+
+func parseNullableInt(s string) *int {
+	parsed, err := strconv.Atoi(s)
+	if err != nil {
+		return nil
+	}
+
+	return &parsed
 }

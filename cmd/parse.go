@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/exp/maps"
@@ -58,5 +59,33 @@ func runParse(cmd *cobra.Command, args []string) error {
 		return stopRepo.SaveStopComplexes(modelStopComplexes...)
 	}
 
-	return p.Parse()
+	p.OnStopsParsed = func(stops []parser.Stop) error {
+		modelStops := make([]*model.Stop, 0, len(stops))
+		for _, stop := range stops {
+			var location *model.Coordinates
+			if stop.Latitude != nil && stop.Longitude != nil {
+				location = &model.Coordinates{
+					Latitude:  *stop.Latitude,
+					Longitude: *stop.Longitude,
+				}
+			}
+
+			modelStops = append(modelStops, &model.Stop{
+				ID:          stop.StopID,
+				Street:      stop.Street,
+				Direction:   stop.Direction,
+				Location:    location,
+				Platform:    stop.Platform,
+				StopComplex: &model.StopComplex{ID: stop.StopComplexID},
+			})
+		}
+		return stopRepo.SaveStops(modelStops...)
+	}
+
+	before := time.Now()
+	err = p.Parse()
+	if err == nil {
+		fmt.Printf("file parsed, %v elapsed\n", time.Since(before))
+	}
+	return err
 }

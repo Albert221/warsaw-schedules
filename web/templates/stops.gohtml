@@ -70,7 +70,9 @@
             <td>{{$complex.Name}} {{.ID}}</td>
             <td>{{.Street}}</td>
             <td>{{.Direction}}</td>
-            <td>{{.Latitude}}, {{.Longitude}}</td>
+            <td>
+            {{if .Location}}{{.Location.Latitude}}, {{.Location.Longitude}}{{end}}
+            </td>
           </tr>
           {{end}}
         {{end}}
