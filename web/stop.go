@@ -24,6 +24,7 @@ func (c *StopController) StopsList() http.Handler {
 
 	type vm struct {
 		StopComplexes []*model.StopComplex
+		Rows          int
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -34,7 +35,15 @@ func (c *StopController) StopsList() http.Handler {
 			return
 		}
 
-		vm := vm{StopComplexes: stopComplexes}
+		rows := len(stopComplexes)
+		for _, stopComplex := range stopComplexes {
+			rows += len(stopComplex.Stops)
+		}
+
+		vm := vm{
+			StopComplexes: stopComplexes,
+			Rows:          rows,
+		}
 		tpl.Execute(w, vm)
 	})
 }
